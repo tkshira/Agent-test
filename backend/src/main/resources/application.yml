@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: ai-products-chatbot
+
+server:
+  port: 8080
+
+azure:
+  ai:
+    # Azure AI Foundry Project endpoint
+    # Format: https://<hub-name>.services.ai.azure.com/api/projects/<project-name>
+    project-endpoint: ${AZURE_AI_PROJECT_ENDPOINT}
+
+    # Azure AI Search configuration
+    search:
+      endpoint: ${AZURE_SEARCH_ENDPOINT}
+      # Connection ID from Azure AI Foundry project connections
+      connection-id: ${AZURE_SEARCH_CONNECTION_ID}
+      index-name: ${AZURE_SEARCH_INDEX_NAME:products}
+
+    # Agent configuration
+    agent:
+      # The deployed model name in Azure AI Foundry (e.g., gpt-4o)
+      model: ${AZURE_AGENT_MODEL:gpt-4o}
+      name: ProductSearchAgent
+      # Agent ID persisted across restarts (optional; created on startup if blank)
+      id: ${AZURE_AGENT_ID:}
+      instructions: |
+        You are a helpful product assistant for our fictional store.
+        You have access to a product catalog via Azure AI Search.
+        When a user asks about products, search the catalog and provide accurate details.
+        When presenting products include: name, description, price, and availability.
+        Always be friendly and concise. If multiple products match, list them clearly.
+        When a user wants to purchase, confirm the product details before finalizing.
+
+  # Azure credentials (DefaultAzureCredential is used; set env vars as needed)
+  # For local dev: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID
+  # Or use: az login
+
+mcp:
+  server:
+    name: ProductChatbotMCP
+    version: "1.0.0"
+    # Path where purchase logs are written
+    log-path: ${MCP_LOG_PATH:./logs/purchases.log}
+
+logging:
+  level:
+    com.example.aiproducts: DEBUG
+    com.azure: WARN
