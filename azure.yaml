@@ -1,0 +1,23 @@
+# Azure Developer CLI project definition
+# Run: azd up   → provision + deploy everything
+#      azd down → tear down all resources
+name: ai-products-chatbot
+metadata:
+  template: ai-products-chatbot@0.0.1
+
+services:
+  backend:
+    project: ./backend
+    language: java
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: .
+
+  frontend:
+    project: ./frontend
+    language: js
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: .
