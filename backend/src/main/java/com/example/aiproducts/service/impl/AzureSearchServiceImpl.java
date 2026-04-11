@@ -3,6 +3,7 @@ package com.example.aiproducts.service.impl;
 import com.azure.search.documents.SearchClient;
 import com.azure.search.documents.models.SearchOptions;
 import com.azure.search.documents.models.SearchResult;
+import com.azure.search.documents.models.SemanticSearchOptions;
 import com.example.aiproducts.model.Product;
 import com.example.aiproducts.repository.ProductRepository;
 import com.example.aiproducts.service.SearchService;
@@ -49,7 +50,8 @@ public class AzureSearchServiceImpl implements SearchService {
                     .setIncludeTotalCount(false)
                     // Enable semantic ranking (requires semantic configuration in the index)
                     .setQueryType(com.azure.search.documents.models.QueryType.SEMANTIC)
-                    .setSemanticConfigurationName("default");
+                    .setSemanticSearchOptions(new SemanticSearchOptions()
+                            .setSemanticConfigurationName("default"));
 
             List<Product> results = new ArrayList<>();
             searchClient.search(query, options, null)

@@ -1,7 +1,21 @@
 package com.example.aiproducts.service.impl;
 
-import com.azure.ai.projects.AIProjectClient;
-import com.azure.ai.projects.models.*;
+import com.azure.ai.agents.persistent.PersistentAgentsClient;
+import com.azure.ai.agents.persistent.models.AISearchIndexResource;
+import com.azure.ai.agents.persistent.models.AzureAISearchToolDefinition;
+import com.azure.ai.agents.persistent.models.AzureAISearchToolResource;
+import com.azure.ai.agents.persistent.models.CreateAgentOptions;
+import com.azure.ai.agents.persistent.models.CreateRunOptions;
+import com.azure.ai.agents.persistent.models.ListSortOrder;
+import com.azure.ai.agents.persistent.models.MessageContent;
+import com.azure.ai.agents.persistent.models.MessageRole;
+import com.azure.ai.agents.persistent.models.MessageTextContent;
+import com.azure.ai.agents.persistent.models.PersistentAgent;
+import com.azure.ai.agents.persistent.models.PersistentAgentThread;
+import com.azure.ai.agents.persistent.models.RunStatus;
+import com.azure.ai.agents.persistent.models.ThreadMessage;
+import com.azure.ai.agents.persistent.models.ThreadRun;
+import com.azure.ai.agents.persistent.models.ToolResources;
 import com.example.aiproducts.model.ChatResponse;
 import com.example.aiproducts.model.Product;
 import com.example.aiproducts.service.AgentService;
@@ -18,7 +32,7 @@ import java.util.List;
 /**
  * Azure AI Foundry implementation of AgentService.
  *
- * Uses the azure-ai-projects SDK to:
+ * Uses the azure-ai-agents-persistent SDK to:
  * 1. Create/reuse an agent with AzureAISearch tool grounding
  * 2. Manage conversation threads
  * 3. Parse product references from agent responses
@@ -31,7 +45,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AzureAgentServiceImpl implements AgentService {
 
-    private final AIProjectClient projectClient;
+    private final PersistentAgentsClient agentsClient;
     private final SearchService searchService;
 
     @Value("${azure.ai.agent.model}")
@@ -56,28 +70,30 @@ public class AzureAgentServiceImpl implements AgentService {
 
     @PostConstruct
     public void initAgent() {
-        AgentsClient agentsClient = projectClient.getAgentsClient();
-
         if (configuredAgentId != null && !configuredAgentId.isBlank()) {
-            // Reuse existing agent
             agentId = configuredAgentId;
             log.info("Reusing Azure AI Foundry agent: {}", agentId);
             return;
         }
 
-        // Build the Azure AI Search tool definition for grounding
-        AzureAISearchToolDefinition searchTool = new AzureAISearchToolDefinition();
-        AzureAISearchIndexResource indexResource = new AzureAISearchIndexResource(
-                searchConnectionId, searchIndexName);
-        searchTool.setIndexList(List.of(indexResource));
+        // Wire up Azure AI Search as a grounding tool
+        AISearchIndexResource indexResource = new AISearchIndexResource()
+                .setIndexConnectionId(searchConnectionId)
+                .setIndexName(searchIndexName);
 
-        // Create agent with search tool
-        Agent agent = agentsClient.createAgent(
-                new CreateAgentOptions(model)
+        AzureAISearchToolResource searchToolResource = new AzureAISearchToolResource()
+                .setIndexList(List.of(indexResource));
+
+        ToolResources toolResources = new ToolResources()
+                .setAzureAISearch(searchToolResource);
+
+        // Create agent with search tool definition + resources
+        PersistentAgent agent = agentsClient.getPersistentAgentsAdministrationClient()
+                .createAgent(new CreateAgentOptions(model)
                         .setName(agentName)
                         .setInstructions(agentInstructions)
-                        .setTools(List.of(searchTool))
-        );
+                        .setTools(List.of(new AzureAISearchToolDefinition()))
+                        .setToolResources(toolResources));
 
         agentId = agent.getId();
         log.info("Created Azure AI Foundry agent: {} (id={}). " +
@@ -86,32 +102,28 @@ public class AzureAgentServiceImpl implements AgentService {
 
     @Override
     public ChatResponse chat(String message, String threadId) {
-        AgentsClient agentsClient = projectClient.getAgentsClient();
+        var threadsClient  = agentsClient.getThreadsClient();
+        var messagesClient = agentsClient.getMessagesClient();
+        var runsClient     = agentsClient.getRunsClient();
 
         // Create or retrieve thread
-        AgentThread thread;
+        PersistentAgentThread thread;
         if (threadId == null || threadId.isBlank()) {
-            thread = agentsClient.createThread(new AgentThreadCreationOptions());
+            thread = threadsClient.createThread();
             log.debug("Created new thread: {}", thread.getId());
         } else {
-            thread = agentsClient.getThread(threadId);
+            thread = threadsClient.getThread(threadId);
             log.debug("Reusing thread: {}", thread.getId());
         }
 
         // Add user message to thread
-        agentsClient.createMessage(
-                thread.getId(),
-                new CreateMessageOptions(MessageRole.USER)
-                        .setContent(message)
-        );
+        messagesClient.createMessage(thread.getId(), MessageRole.USER, message);
 
-        // Run the agent on the thread
-        ThreadRun run = agentsClient.createAndProcessRun(
-                thread.getId(),
-                new CreateRunOptions(agentId)
-        );
+        // Start the agent run and poll until a terminal state is reached
+        ThreadRun run = runsClient.createRun(new CreateRunOptions(thread.getId(), agentId));
+        run = pollUntilDone(runsClient, thread.getId(), run);
 
-        if (run.getStatus() != RunStatus.COMPLETED) {
+        if (!RunStatus.COMPLETED.equals(run.getStatus())) {
             log.error("Agent run ended with status: {}", run.getStatus());
             return ChatResponse.builder()
                     .message("I encountered an issue processing your request. Please try again.")
@@ -121,10 +133,10 @@ public class AzureAgentServiceImpl implements AgentService {
         }
 
         // Retrieve the latest assistant message
-        String responseText = extractLatestAssistantMessage(agentsClient, thread.getId());
+        String responseText = extractLatestAssistantMessage(messagesClient, thread.getId());
 
-        // Parse any product references from the response
-        List<Product> products = extractProductsFromResponse(responseText, message);
+        // Enrich the response with structured product data
+        List<Product> products = extractProductsFromResponse(message);
 
         return ChatResponse.builder()
                 .message(responseText)
@@ -137,17 +149,45 @@ public class AzureAgentServiceImpl implements AgentService {
     public void deleteThread(String threadId) {
         if (threadId == null || threadId.isBlank()) return;
         try {
-            projectClient.getAgentsClient().deleteThread(threadId);
+            agentsClient.getThreadsClient().deleteThread(threadId);
             log.debug("Deleted thread: {}", threadId);
         } catch (Exception e) {
             log.warn("Failed to delete thread {}: {}", threadId, e.getMessage());
         }
     }
 
-    private String extractLatestAssistantMessage(AgentsClient agentsClient, String threadId) {
-        // List messages in descending order (latest first)
-        List<ThreadMessage> messages = agentsClient
-                .listMessages(threadId, new ListSortOrder("desc"), 1, null, null, null)
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Polls getRun() every second until the run reaches a terminal state.
+     */
+    private ThreadRun pollUntilDone(
+            com.azure.ai.agents.persistent.RunsClient runsClient,
+            String threadId,
+            ThreadRun run) {
+        while (RunStatus.QUEUED.equals(run.getStatus())
+                || RunStatus.IN_PROGRESS.equals(run.getStatus())
+                || RunStatus.REQUIRES_ACTION.equals(run.getStatus())) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            run = runsClient.getRun(threadId, run.getId());
+        }
+        return run;
+    }
+
+    private String extractLatestAssistantMessage(
+            com.azure.ai.agents.persistent.MessagesClient messagesClient,
+            String threadId) {
+
+        // List messages descending (latest first), limit 1, no run filter
+        List<ThreadMessage> messages = messagesClient
+                .listMessages(threadId, null, 1, ListSortOrder.DESCENDING, null, null)
                 .stream()
                 .toList();
 
@@ -162,16 +202,15 @@ public class AzureAgentServiceImpl implements AgentService {
                 sb.append(textContent.getText().getValue());
             }
         }
-        return sb.toString();
+        return sb.isEmpty() ? "No response received." : sb.toString();
     }
 
     /**
-     * After the agent replies, optionally enrich the response with structured product data
-     * by re-searching for products mentioned in the conversation.
+     * After the agent replies, enrich the response with structured product data
+     * by searching for products related to the user's query.
      */
-    private List<Product> extractProductsFromResponse(String responseText, String userMessage) {
+    private List<Product> extractProductsFromResponse(String userMessage) {
         try {
-            // Search for products based on the user's original query
             return searchService.searchProducts(userMessage, 4);
         } catch (Exception e) {
             log.warn("Product extraction failed: {}", e.getMessage());
