@@ -1,12 +1,11 @@
 package com.example.aiproducts.config;
 
-import com.azure.ai.projects.AIProjectClient;
-import com.azure.ai.projects.AIProjectClientBuilder;
+import com.azure.ai.agents.persistent.PersistentAgentsClient;
+import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
 import com.azure.identity.DefaultAzureCredential;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.search.documents.SearchClient;
 import com.azure.search.documents.SearchClientBuilder;
-import com.azure.core.credential.AzureKeyCredential;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,12 +35,12 @@ public class AzureAIConfig {
     }
 
     /**
-     * Azure AI Projects client — entry point to Azure AI Foundry agents, threads, etc.
-     * Swap the endpoint to connect to a different Foundry project.
+     * Azure AI Agents Persistent client — manages agents, threads, messages, and runs.
+     * The endpoint is the Azure AI Foundry project endpoint.
      */
     @Bean
-    public AIProjectClient aiProjectClient(DefaultAzureCredential credential) {
-        return new AIProjectClientBuilder()
+    public PersistentAgentsClient persistentAgentsClient(DefaultAzureCredential credential) {
+        return new PersistentAgentsClientBuilder()
                 .endpoint(projectEndpoint)
                 .credential(credential)
                 .buildClient();
@@ -50,9 +49,6 @@ public class AzureAIConfig {
     /**
      * Azure AI Search client for direct product searches outside of agent context.
      * Uses DefaultAzureCredential (RBAC) — no API key required when using managed identity.
-     *
-     * To use an API key instead, replace with:
-     *   .credential(new AzureKeyCredential(apiKey))
      */
     @Bean
     public SearchClient searchClient(DefaultAzureCredential credential) {

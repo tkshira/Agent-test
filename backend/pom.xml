@@ -34,10 +34,17 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Azure AI Projects (Foundry Agents) -->
+        <!-- Azure AI Projects (Foundry — connections, deployments, indexes) -->
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-ai-projects</artifactId>
+            <version>1.0.0-beta.2</version>
+        </dependency>
+
+        <!-- Azure AI Agents Persistent (threads, runs, messages) -->
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-ai-agents-persistent</artifactId>
             <version>1.0.0-beta.2</version>
         </dependency>
 
