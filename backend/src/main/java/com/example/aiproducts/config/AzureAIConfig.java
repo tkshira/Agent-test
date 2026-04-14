@@ -2,6 +2,8 @@ package com.example.aiproducts.config;
 
 import com.azure.ai.agents.persistent.PersistentAgentsClient;
 import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+import com.azure.ai.projects.AIProjectClientBuilder;
+import com.azure.ai.projects.implementation.AIProjectClientImpl;
 import com.azure.identity.DefaultAzureCredential;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.search.documents.SearchClient;
@@ -35,8 +37,19 @@ public class AzureAIConfig {
     }
 
     /**
-     * Azure AI Agents Persistent client — manages agents, threads, messages, and runs.
-     * The endpoint is the Azure AI Foundry project endpoint.
+     * Azure AI Projects client — entry point to Azure AI Foundry agents, threads, etc.
+     * Swap the endpoint to connect to a different Foundry project.
+     */
+    @Bean
+    public AIProjectClientBuilder aiProjectClient(DefaultAzureCredential credential) {
+        return new AIProjectClientBuilder()
+                .endpoint(projectEndpoint)
+                .credential(credential);
+    }
+
+    /**
+     * Persistent Agents client for managing agents, threads, and runs.
+     * Uses the same endpoint and credential as the AI Project client.
      */
     @Bean
     public PersistentAgentsClient persistentAgentsClient(DefaultAzureCredential credential) {
@@ -49,6 +62,9 @@ public class AzureAIConfig {
     /**
      * Azure AI Search client for direct product searches outside of agent context.
      * Uses DefaultAzureCredential (RBAC) — no API key required when using managed identity.
+     *
+     * To use an API key instead, replace with:
+     *   .credential(new AzureKeyCredential(apiKey))
      */
     @Bean
     public SearchClient searchClient(DefaultAzureCredential credential) {
