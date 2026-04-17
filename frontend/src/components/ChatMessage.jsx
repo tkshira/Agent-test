@@ -2,11 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import ProductCard from './ProductCard';
 
-/**
- * Renders a single chat bubble.
- * Assistant messages can contain markdown and a product grid.
- */
-export default function ChatMessage({ msg, sessionId }) {
+export default function ChatMessage({ msg, sessionId, onAskAbout, compareList, onToggleCompare }) {
   const isUser      = msg.role === 'user';
   const isError     = msg.error;
   const hasProducts = msg.products && msg.products.length > 0;
@@ -28,6 +24,9 @@ export default function ChatMessage({ msg, sessionId }) {
               key={product.id}
               product={product}
               sessionId={sessionId}
+              onAskAbout={onAskAbout}
+              compareSelected={compareList?.some((p) => p.id === product.id)}
+              onToggleCompare={onToggleCompare}
             />
           ))}
         </div>

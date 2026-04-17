@@ -94,6 +94,37 @@ public class AzureSearchServiceImpl implements SearchService {
         }
     }
 
+    @Override
+    public List<Product> findRelated(String productId, int topK) {
+        Product source = getProductById(productId);
+        if (source == null) return List.of();
+
+        try {
+            // Search semantically using the product name + tagline as the query
+            String query = source.getName() + " " + (source.getTagline() != null ? source.getTagline() : "");
+            SearchOptions options = new SearchOptions()
+                    .setTop(topK + 1)
+                    .setQueryType(com.azure.search.documents.models.QueryType.SEMANTIC)
+                    .setSemanticConfigurationName("default");
+
+            List<Product> results = new ArrayList<>();
+            searchClient.search(query, options, null)
+                    .forEach(result -> results.add(mapToProduct(result)));
+
+            return results.stream()
+                    .filter(p -> !productId.equals(p.getId()))
+                    .limit(topK)
+                    .toList();
+
+        } catch (Exception e) {
+            log.warn("Related products search failed, falling back to category. Reason: {}", e.getMessage());
+            return productRepository.findByCategory(source.getCategory()).stream()
+                    .filter(p -> !productId.equals(p.getId()))
+                    .limit(topK)
+                    .toList();
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private Product mapToProduct(SearchResult result) {
         Map<String, Object> doc = (Map<String, Object>) result.getDocument(Map.class);
