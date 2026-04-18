@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    active: local
   application:
     name: ai-products-chatbot
 
@@ -48,3 +50,5 @@ logging:
   level:
     com.example.aiproducts: DEBUG
     com.azure: WARN
+    com.azure.identity: DEBUG
+    com.azure.core.http: DEBUG
