@@ -117,24 +117,24 @@ public class AzureAgentServiceImpl implements AgentService {
         }
 
         // Add user message to thread
-        messagesClient.createMessage(thread.getId(), MessageRole.USER, message);
+        // messagesClient.createMessage(thread.getId(), MessageRole.USER, message);
 
-        // Start the agent run and poll until a terminal state is reached
-        ThreadRun run = runsClient.createRun(new CreateRunOptions(thread.getId(), agentId));
-        run = pollUntilDone(runsClient, thread.getId(), run);
+        // // Start the agent run and poll until a terminal state is reached
+        // ThreadRun run = runsClient.createRun(new CreateRunOptions(thread.getId(), agentId));
+        // run = pollUntilDone(runsClient, thread.getId(), run);
 
-        if (!RunStatus.COMPLETED.equals(run.getStatus())) {
-            log.error("Agent run ended with status: {}", run.getStatus());
-            return ChatResponse.builder()
-                    .message("I encountered an issue processing your request. Please try again.")
-                    .threadId(thread.getId())
-                    .error(true)
-                    .build();
-        }
+        // if (!RunStatus.COMPLETED.equals(run.getStatus())) {
+        //     log.error("Agent run ended with status: {}", run.getStatus());
+        //     return ChatResponse.builder()
+        //             .message("I encountered an issue processing your request. Please try again.")
+        //             .threadId(thread.getId())
+        //             .error(true)
+        //             .build();
+        // }
 
-        // Retrieve the latest assistant message
-        String responseText = extractLatestAssistantMessage(messagesClient, thread.getId());
-
+        // // Retrieve the latest assistant message
+        // String responseText = extractLatestAssistantMessage(messagesClient, thread.getId());
+        String responseText = "Simulated agent response to: " + message;
         // Enrich the response with structured product data
         List<Product> products = extractProductsFromResponse(message);
 

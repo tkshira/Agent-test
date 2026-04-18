@@ -7,6 +7,7 @@ import com.azure.search.documents.models.SemanticSearchOptions;
 import com.example.aiproducts.model.Product;
 import com.example.aiproducts.repository.ProductRepository;
 import com.example.aiproducts.service.SearchService;
+import com.example.aiproducts.config.AzureAIConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class AzureSearchServiceImpl implements SearchService {
 
     private final SearchClient searchClient;
     private final ProductRepository productRepository;
+    private final AzureAIConfig azureAIConfig;
 
     @Override
     public List<Product> searchProducts(String query, int topK) {
@@ -50,8 +52,7 @@ public class AzureSearchServiceImpl implements SearchService {
                     .setIncludeTotalCount(false)
                     // Enable semantic ranking (requires semantic configuration in the index)
                     .setQueryType(com.azure.search.documents.models.QueryType.SEMANTIC)
-                    .setSemanticSearchOptions(new SemanticSearchOptions()
-                            .setSemanticConfigurationName("default"));
+                    .setSemanticSearchOptions(azureAIConfig.getSemanticSearchOptions());
 
             List<Product> results = new ArrayList<>();
             searchClient.search(query, options, null)
