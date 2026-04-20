@@ -22,6 +22,14 @@
 - Check coverage after running tests and ensure no regressions
 - Do not merge code that significantly reduces overall coverage
 
+### SOLID Principles
+- **S**ingle Responsibility: each class/module has one reason to change
+- **O**pen/Closed: open for extension, closed for modification
+- **L**iskov Substitution: subtypes must be substitutable for their base types
+- **I**nterface Segregation: prefer small, focused interfaces over large general ones
+- **D**ependency Inversion: depend on abstractions, not concretions
+- Review new code against all five principles before merging
+
 ### Abstraction & Interfaces
 - Prefer interfaces and abstract types over concrete implementations
 - Depend on abstractions, not concretions (Dependency Inversion Principle)
