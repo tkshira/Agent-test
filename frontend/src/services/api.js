@@ -35,3 +35,24 @@ export async function purchaseProduct(productId, quantity = 1, sessionId = null)
 export async function deleteThread(threadId) {
   await api.delete(`/api/chat/${threadId}`);
 }
+
+/**
+ * Fetch products related to a given product.
+ * @param {string} productId
+ * @param {number} topK
+ * @returns {Promise<Array>}
+ */
+export async function getRelatedProducts(productId, topK = 4) {
+  const { data } = await api.get(`/api/products/related/${productId}`, { params: { topK } });
+  return data;
+}
+
+/**
+ * Fetch full details for a list of products for side-by-side comparison.
+ * @param {string[]} productIds
+ * @returns {Promise<Array>}
+ */
+export async function compareProducts(productIds) {
+  const { data } = await api.post('/api/products/compare', { productIds });
+  return data;
+}

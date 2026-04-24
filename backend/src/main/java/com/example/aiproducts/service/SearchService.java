@@ -37,4 +37,13 @@ public interface SearchService {
      * @return matching products
      */
     List<Product> listByCategory(String category, int topK);
+
+    /**
+     * Find products related to a given product (same category, similar attributes).
+     *
+     * @param productId the reference product ID
+     * @param topK      maximum results (excluding the reference product)
+     * @return related products
+     */
+    List<Product> findRelated(String productId, int topK);
 }
