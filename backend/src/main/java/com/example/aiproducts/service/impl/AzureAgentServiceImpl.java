@@ -2,6 +2,7 @@ package com.example.aiproducts.service.impl;
 
 import com.azure.ai.agents.persistent.PersistentAgentsClient;
 import com.azure.ai.agents.persistent.models.AISearchIndexResource;
+import com.azure.ai.agents.persistent.models.AzureAISearchQueryType;
 import com.azure.ai.agents.persistent.models.AzureAISearchToolDefinition;
 import com.azure.ai.agents.persistent.models.AzureAISearchToolResource;
 import com.azure.ai.agents.persistent.models.CreateAgentOptions;
@@ -26,6 +27,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -66,6 +71,9 @@ public class AzureAgentServiceImpl implements AgentService {
     @Value("${azure.ai.search.index-name}")
     private String searchIndexName;
 
+    @Value("${azure.ai.search.query-type:simple}")
+    private String searchQueryType;
+
     private String agentId;
 
     @PostConstruct
@@ -77,9 +85,11 @@ public class AzureAgentServiceImpl implements AgentService {
         }
 
         // Wire up Azure AI Search as a grounding tool
+        AzureAISearchQueryType queryType = AzureAISearchQueryType.fromString(searchQueryType);
         AISearchIndexResource indexResource = new AISearchIndexResource()
                 .setIndexConnectionId(searchConnectionId)
-                .setIndexName(searchIndexName);
+                .setIndexName(searchIndexName)
+                .setQueryType(queryType);
 
         AzureAISearchToolResource searchToolResource = new AzureAISearchToolResource()
                 .setIndexList(List.of(indexResource));
@@ -96,8 +106,25 @@ public class AzureAgentServiceImpl implements AgentService {
                         .setToolResources(toolResources));
 
         agentId = agent.getId();
-        log.info("Created Azure AI Foundry agent: {} (id={}). " +
-                 "Set AZURE_AGENT_ID={} to reuse across restarts.", agentName, agentId, agentId);
+        log.info("Created Azure AI Foundry agent: {} (id={}). Persisting ID for next restart.", agentName, agentId);
+        persistAgentId(agentId);
+    }
+
+    /**
+     * Writes the agent ID to config/application.properties so Spring Boot picks it up
+     * automatically on the next restart — no manual env-var change required.
+     */
+    private void persistAgentId(String id) {
+        try {
+            Path configDir = Path.of("config");
+            Files.createDirectories(configDir);
+            Path configFile = configDir.resolve("application.properties");
+            String content = "azure.ai.agent.id=" + id + System.lineSeparator();
+            Files.writeString(configFile, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            log.info("Agent ID persisted to {}", configFile.toAbsolutePath());
+        } catch (IOException e) {
+            log.warn("Could not persist agent ID to config file: {}", e.getMessage());
+        }
     }
 
     @Override

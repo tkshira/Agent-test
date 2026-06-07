@@ -19,6 +19,8 @@ azure:
       # Connection ID from Azure AI Foundry project connections
       connection-id: ${AZURE_SEARCH_CONNECTION_ID}
       index-name: ${AZURE_SEARCH_INDEX_NAME:products}
+      # Query type for the knowledge base: simple, semantic, vector, vectorSimpleHybrid, vectorSemanticHybrid
+      query-type: ${AZURE_SEARCH_QUERY_TYPE:simple}
 
     # Agent configuration
     agent:
