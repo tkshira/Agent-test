@@ -16,7 +16,10 @@ azure:
     # Azure AI Search configuration
     search:
       endpoint: ${AZURE_SEARCH_ENDPOINT}
-      # Connection ID from Azure AI Foundry project connections
+      # Azure AI Search connection name or full ARM connection ID.
+      # Short name (e.g. "my-search"): resolved to full ARM path via Connections API at startup.
+      # Full path: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.CognitiveServices/
+      #            accounts/{foundry}/projects/{project}/connections/{name}
       connection-id: ${AZURE_SEARCH_CONNECTION_ID}
       index-name: ${AZURE_SEARCH_INDEX_NAME:products}
       # Query type for the knowledge base: simple, semantic, vector, vectorSimpleHybrid, vectorSemanticHybrid

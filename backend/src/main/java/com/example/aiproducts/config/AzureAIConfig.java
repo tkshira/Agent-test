@@ -3,7 +3,7 @@ package com.example.aiproducts.config;
 import com.azure.ai.agents.persistent.PersistentAgentsClient;
 import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
 import com.azure.ai.projects.AIProjectClientBuilder;
-import com.azure.ai.projects.implementation.AIProjectClientImpl;
+import com.azure.ai.projects.ConnectionsClient;
 import com.azure.identity.DefaultAzureCredential;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.search.documents.SearchClient;
@@ -46,14 +46,22 @@ public class AzureAIConfig {
     }
 
     /**
-     * Azure AI Projects client — entry point to Azure AI Foundry agents, threads, etc.
-     * Swap the endpoint to connect to a different Foundry project.
+     * Azure AI Projects client builder — shared base for all project-scoped clients.
      */
     @Bean
-    public AIProjectClientBuilder aiProjectClient(DefaultAzureCredential credential) {
+    public AIProjectClientBuilder aiProjectClientBuilder(DefaultAzureCredential credential) {
         return new AIProjectClientBuilder()
                 .endpoint(projectEndpoint)
                 .credential(credential);
+    }
+
+    /**
+     * Connections client for resolving registered project connections (e.g. Azure AI Search).
+     * Used to look up the full ARM connection ID from a connection name.
+     */
+    @Bean
+    public ConnectionsClient connectionsClient(AIProjectClientBuilder builder) {
+        return builder.buildConnectionsClient();
     }
 
     /**

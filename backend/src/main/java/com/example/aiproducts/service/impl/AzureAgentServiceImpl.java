@@ -3,6 +3,8 @@ package com.example.aiproducts.service.impl;
 import com.azure.ai.agents.persistent.PersistentAgentsClient;
 import com.azure.ai.agents.persistent.models.AISearchIndexResource;
 import com.azure.ai.agents.persistent.models.AzureAISearchQueryType;
+import com.azure.ai.projects.ConnectionsClient;
+import com.azure.ai.projects.models.ConnectionType;
 import com.azure.ai.agents.persistent.models.AzureAISearchToolDefinition;
 import com.azure.ai.agents.persistent.models.AzureAISearchToolResource;
 import com.azure.ai.agents.persistent.models.CreateAgentOptions;
@@ -51,6 +53,7 @@ import java.util.List;
 public class AzureAgentServiceImpl implements AgentService {
 
     private final PersistentAgentsClient agentsClient;
+    private final ConnectionsClient connectionsClient;
     private final SearchService searchService;
 
     @Value("${azure.ai.agent.model}")
@@ -85,9 +88,16 @@ public class AzureAgentServiceImpl implements AgentService {
         }
 
         // Wire up Azure AI Search as a grounding tool
+        // Resolve the full ARM connection ID — the portal requires this format:
+        //   /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.CognitiveServices/
+        //   accounts/{foundry}/projects/{project}/connections/{name}
+        // If the configured value is already a full path, use it directly;
+        // otherwise look it up by name via the Connections API.
+        String resolvedConnectionId = resolveConnectionId(searchConnectionId);
+
         AzureAISearchQueryType queryType = AzureAISearchQueryType.fromString(searchQueryType);
         AISearchIndexResource indexResource = new AISearchIndexResource()
-                .setIndexConnectionId(searchConnectionId)
+                .setIndexConnectionId(resolvedConnectionId)
                 .setIndexName(searchIndexName)
                 .setQueryType(queryType);
 
@@ -108,6 +118,36 @@ public class AzureAgentServiceImpl implements AgentService {
         agentId = agent.getId();
         log.info("Created Azure AI Foundry agent: {} (id={}). Persisting ID for next restart.", agentName, agentId);
         persistAgentId(agentId);
+    }
+
+    /**
+     * Returns the full ARM connection ID needed by both the agent runtime and the portal.
+     * If the configured value is already an absolute path (starts with "/subscriptions/"),
+     * it is used as-is. Otherwise it is treated as a connection name and resolved via the
+     * Connections API, which is the same approach the Python SDK sample uses:
+     *   project_client.connections.get_default(ConnectionType.AZURE_AI_SEARCH).id
+     */
+    private String resolveConnectionId(String configured) {
+        if (configured != null && configured.startsWith("/subscriptions/")) {
+            log.debug("Using configured connection ID directly: {}", configured);
+            return configured;
+        }
+        try {
+            if (configured != null && !configured.isBlank()) {
+                String resolved = connectionsClient.getConnection(configured, false).getId();
+                log.info("Resolved search connection '{}' → {}", configured, resolved);
+                return resolved;
+            }
+            // Fall back to the default Azure AI Search connection registered in the project
+            String resolved = connectionsClient
+                    .getDefaultConnection(ConnectionType.AZURE_AISEARCH, false)
+                    .getId();
+            log.info("Resolved default Azure AI Search connection → {}", resolved);
+            return resolved;
+        } catch (Exception e) {
+            log.warn("Could not resolve connection ID for '{}', using as-is: {}", configured, e.getMessage());
+            return configured;
+        }
     }
 
     /**
