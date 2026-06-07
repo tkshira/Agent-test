@@ -29,23 +29,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Azure AI Foundry implementation of AgentService.
  *
- * Uses the azure-ai-agents-persistent SDK to:
- * 1. Create/reuse an agent with AzureAISearch tool grounding
- * 2. Manage conversation threads
- * 3. Parse product references from agent responses
- *
- * The agent is created once on startup. Its ID is logged so you can persist it
- * in AZURE_AGENT_ID to reuse across restarts (avoiding creating duplicate agents).
+ * On startup, looks for an existing agent whose name matches azure.ai.agent.name
+ * and reuses it. Creates a new one only when no match is found. This avoids
+ * accumulating duplicate agents across restarts without any file or env-var
+ * management. Set AZURE_AGENT_ID to pin a specific agent ID when needed.
  */
 @Slf4j
 @Service
@@ -81,43 +75,50 @@ public class AzureAgentServiceImpl implements AgentService {
 
     @PostConstruct
     public void initAgent() {
+        var adminClient = agentsClient.getPersistentAgentsAdministrationClient();
+
+        // Explicit override: honour a pinned ID when one is configured
         if (configuredAgentId != null && !configuredAgentId.isBlank()) {
             agentId = configuredAgentId;
-            log.info("Reusing Azure AI Foundry agent: {}", agentId);
+            log.info("Using pinned agent id from config: {}", agentId);
             return;
         }
 
-        // Wire up Azure AI Search as a grounding tool
-        // Resolve the full ARM connection ID — the portal requires this format:
-        //   /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.CognitiveServices/
-        //   accounts/{foundry}/projects/{project}/connections/{name}
-        // If the configured value is already a full path, use it directly;
-        // otherwise look it up by name via the Connections API.
-        String resolvedConnectionId = resolveConnectionId(searchConnectionId);
+        // Default: find the first existing agent whose name matches our configured name.
+        // This avoids creating duplicate agents on every restart without any file or
+        // env-var management.
+        Optional<PersistentAgent> existing = adminClient.listAgents()
+                .stream()
+                .filter(a -> agentName.equals(a.getName()))
+                .findFirst();
 
+        if (existing.isPresent()) {
+            agentId = existing.get().getId();
+            log.info("Reusing existing agent '{}' (id={})", agentName, agentId);
+            return;
+        }
+
+        // No agent with this name found — create one
+        String resolvedConnectionId = resolveConnectionId(searchConnectionId);
         AzureAISearchQueryType queryType = AzureAISearchQueryType.fromString(searchQueryType);
+
         AISearchIndexResource indexResource = new AISearchIndexResource()
                 .setIndexConnectionId(resolvedConnectionId)
                 .setIndexName(searchIndexName)
                 .setQueryType(queryType);
 
-        AzureAISearchToolResource searchToolResource = new AzureAISearchToolResource()
-                .setIndexList(List.of(indexResource));
-
         ToolResources toolResources = new ToolResources()
-                .setAzureAISearch(searchToolResource);
+                .setAzureAISearch(new AzureAISearchToolResource()
+                        .setIndexList(List.of(indexResource)));
 
-        // Create agent with search tool definition + resources
-        PersistentAgent agent = agentsClient.getPersistentAgentsAdministrationClient()
-                .createAgent(new CreateAgentOptions(model)
-                        .setName(agentName)
-                        .setInstructions(agentInstructions)
-                        .setTools(List.of(new AzureAISearchToolDefinition()))
-                        .setToolResources(toolResources));
+        PersistentAgent agent = adminClient.createAgent(new CreateAgentOptions(model)
+                .setName(agentName)
+                .setInstructions(agentInstructions)
+                .setTools(List.of(new AzureAISearchToolDefinition()))
+                .setToolResources(toolResources));
 
         agentId = agent.getId();
-        log.info("Created Azure AI Foundry agent: {} (id={}). Persisting ID for next restart.", agentName, agentId);
-        persistAgentId(agentId);
+        log.info("Created new agent '{}' (id={})", agentName, agentId);
     }
 
     /**
@@ -147,23 +148,6 @@ public class AzureAgentServiceImpl implements AgentService {
         } catch (Exception e) {
             log.warn("Could not resolve connection ID for '{}', using as-is: {}", configured, e.getMessage());
             return configured;
-        }
-    }
-
-    /**
-     * Writes the agent ID to config/application.properties so Spring Boot picks it up
-     * automatically on the next restart — no manual env-var change required.
-     */
-    private void persistAgentId(String id) {
-        try {
-            Path configDir = Path.of("config");
-            Files.createDirectories(configDir);
-            Path configFile = configDir.resolve("application.properties");
-            String content = "azure.ai.agent.id=" + id + System.lineSeparator();
-            Files.writeString(configFile, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            log.info("Agent ID persisted to {}", configFile.toAbsolutePath());
-        } catch (IOException e) {
-            log.warn("Could not persist agent ID to config file: {}", e.getMessage());
         }
     }
 

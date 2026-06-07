@@ -29,8 +29,10 @@ azure:
     agent:
       # The deployed model name in Azure AI Foundry (e.g., gpt-4o)
       model: ${AZURE_AGENT_MODEL:gpt-4o}
-      name: ProductSearchAgent
-      # Agent ID persisted across restarts (optional; created on startup if blank)
+      # On startup the service looks for an existing agent with this name and reuses it.
+      # A new agent is created only when none is found. Rename to create a fresh agent.
+      name: ${AZURE_AGENT_NAME:ProductSearchAgent}
+      # Optional: pin a specific agent ID and skip the name lookup entirely.
       id: ${AZURE_AGENT_ID:}
       instructions: |
         You are a helpful product assistant for our fictional store.
