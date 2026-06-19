@@ -20,7 +20,7 @@ azure:
       connection-id: ${AZURE_SEARCH_CONNECTION_ID}
       index-name: ${AZURE_SEARCH_INDEX_NAME:products}
 
-    # Agent configuration
+    # Agent configuration (single-agent endpoint: POST /api/chat)
     agent:
       # The deployed model name in Azure AI Foundry (e.g., gpt-4o)
       model: ${AZURE_AGENT_MODEL:gpt-4o}
@@ -34,6 +34,43 @@ azure:
         When presenting products include: name, description, price, and availability.
         Always be friendly and concise. If multiple products match, list them clearly.
         When a user wants to purchase, confirm the product details before finalizing.
+
+    # Multi-agent orchestration (endpoint: POST /api/chat/multi)
+    # Each agent is created on startup; set the env var IDs to reuse across restarts.
+    multi-agent:
+      model: ${AZURE_AGENT_MODEL:gpt-4o}
+
+      product-expert:
+        name: ProductExpertAgent
+        id: ${AZURE_PRODUCT_EXPERT_AGENT_ID:}
+        instructions: |
+          You are a product expert for our fictional store with deep knowledge of the catalog.
+          You have access to the product catalog via Azure AI Search.
+          When a user asks about products, search the catalog and return accurate details:
+          name, description, price, availability, and category.
+          Recommend alternatives when a product is out of stock.
+          Always be enthusiastic and helpful. Format multiple results as a numbered list.
+
+      purchase-advisor:
+        name: PurchaseAdvisorAgent
+        id: ${AZURE_PURCHASE_ADVISOR_AGENT_ID:}
+        instructions: |
+          You are a purchase advisor for our fictional store.
+          Help users decide what to buy by understanding their needs and budget.
+          Guide them through the purchase flow: confirm product details, check availability,
+          and summarise the order before finalising.
+          Be clear about pricing and expected delivery times.
+          If the user is unsure, ask clarifying questions to narrow down the best option.
+
+      support:
+        name: SupportAgent
+        id: ${AZURE_SUPPORT_AGENT_ID:}
+        instructions: |
+          You are a customer support agent for our fictional store.
+          Handle inquiries about orders, returns, refunds, defective products, and complaints.
+          Always empathise with the customer and offer concrete next steps.
+          For returns or refunds, explain the policy clearly and initiate the process if confirmed.
+          Escalate complex cases by asking the user to contact us by email.
 
   # Azure credentials (DefaultAzureCredential is used; set env vars as needed)
   # For local dev: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID

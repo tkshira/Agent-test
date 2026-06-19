@@ -30,4 +30,10 @@ public class ChatResponse {
     /** True when the response contains an error message. */
     @Builder.Default
     private boolean error = false;
+
+    /**
+     * The specialist agent that handled this response.
+     * Null for single-agent (non-orchestrated) requests.
+     */
+    private AgentRole handledBy;
 }
